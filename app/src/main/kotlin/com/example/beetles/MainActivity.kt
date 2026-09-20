@@ -24,14 +24,26 @@ class MainActivity : AppCompatActivity() {
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
 
         val adapter = ViewPagerAdapter(this)
+        adapter.addFragment(AuthorsFragment(), "Авторы")
         adapter.addFragment(RegistrationFragment(), "Регистрация")
+        adapter.addFragment(HomeFragment(), "Жук")
+        adapter.addFragment(SettingsFragment(), "Настройки")
         adapter.addFragment(RulesFragment(), "Правила")
-
 
         viewPager.adapter = adapter
 
+        val tabIcons = arrayOf(
+            R.drawable.ic_authors,
+            R.drawable.ic_registration,
+            R.drawable.ic_bug,
+            R.drawable.ic_settings,
+            R.drawable.ic_rules
+        )
+
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = adapter.getPageTitle(position)
+            tab.setIcon(tabIcons[position])
         }.attach()
+
+        viewPager.setCurrentItem(2, false)
     }
 }
