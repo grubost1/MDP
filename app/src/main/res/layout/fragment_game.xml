@@ -4,7 +4,7 @@
     android:id="@+id/gameContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E8F5E9"
+    android:background="#203A27"
     android:clickable="true"
     android:focusable="true">
 
@@ -57,6 +57,6 @@
         android:layout_height="match_parent"
         android:layout_below="@id/btnStart"
         android:layout_marginTop="16dp"
-        android:background="@android:color/transparent" />
+        android:background="@drawable/fon" />
 
 </RelativeLayout>
