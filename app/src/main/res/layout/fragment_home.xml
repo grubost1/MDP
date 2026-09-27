@@ -1,52 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/gameContainer"
+    xmlns:app="http://android.com"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E8F5E9"
-    android:clickable="true"
-    android:focusable="true">
+    android:padding="24dp">
 
-    <TextView
-        android:id="@+id/scoreText"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentStart="true"
-        android:layout_margin="16dp"
-        android:text="Очки: 0"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="#2E7D32"
-        android:background="#FFFFFF"
-        android:padding="8dp"
-        android:elevation="4dp"/>
+        android:orientation="vertical"
+        android:layout_centerInParent="true"
+        android:gravity="center">
 
-    <TextView
-        android:id="@+id/timeText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="16dp"
-        android:text="Время: 1:00"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="#C62828"
-        android:background="#FFFFFF"
-        android:padding="8dp"
-        android:elevation="4dp"/>
+        <ImageView
+            android:id="@+id/ivGameLogo"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:src="@drawable/ic_bug"
+            android:contentDescription="Логотип игры"
+            android:layout_marginBottom="16dp"/>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnStart"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginBottom="32dp"
-        android:src="@drawable/ic_play"
-        app:fabSize="normal"
-        app:backgroundTint="#4CAF50"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Игра «Жуки»"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"/>
 
+        <Button
+            android:id="@+id/btnStartGameSession"
+            android:layout_width="220dp"
+            android:layout_height="60dp"
+            android:text="НАЧАТЬ ИГРУ"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:cornerRadius="30dp" />
+
+    </LinearLayout>
 </RelativeLayout>

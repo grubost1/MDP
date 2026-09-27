@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://android.com"
+    android:id="@+id/gameContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E8F5E9"
+    android:clickable="true"
+    android:focusable="true">
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnStart"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="10dp"
+        android:src="@drawable/ic_play"
+        app:backgroundTint="#4CAF50"
+        app:fabSize="normal" />
+
+    <TextView
+        android:id="@+id/scoreText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_toEndOf="@id/btnStart"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="16dp"
+        android:text="Очки: 0"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#2E7D32"
+        android:background="#FFFFFF"
+        android:padding="8dp"
+        android:elevation="4dp"/>
+
+    <TextView
+        android:id="@+id/timeText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:text="Время: 1:00"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#C62828"
+        android:background="#FFFFFF"
+        android:padding="8dp"
+        android:elevation="4dp"/>
+
+    <RelativeLayout
+        android:id="@+id/bugSpawnArea"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/btnStart"
+        android:layout_marginTop="16dp"
+        android:background="@android:color/transparent" />
+
+</RelativeLayout>
