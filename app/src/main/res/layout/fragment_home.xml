@@ -11,6 +11,15 @@
         android:orientation="vertical"
         android:layout_centerInParent="true"
         android:gravity="center">
+        <TextView
+            android:id="@+id/tvCurrentPlayerHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Текущий игрок: Не авторизован"
+            android:textSize="18sp"
+            android:textStyle="italic"
+            android:textColor="#333333"
+            android:layout_marginBottom="24dp"/>
 
         <ImageView
             android:id="@+id/ivGameLogo"

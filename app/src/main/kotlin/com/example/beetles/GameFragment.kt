@@ -106,6 +106,20 @@ class GameFragment : Fragment(R.layout.fragment_game) {
 
         activeBugsList.toList().forEach { removeBugFromSandbox(it, animate = true) }
         Toast.makeText(requireContext(), "Игра окончена! Ваш счет: $score", Toast.LENGTH_LONG).show()
+
+        val prefs = requireContext().getSharedPreferences("BeetlesGamePrefs", Context.MODE_PRIVATE)
+        val name = prefs.getString("current_player_name", "Аноним") ?: "Аноним"
+        val gender = prefs.getString("current_player_gender", "—") ?: "—"
+        val course = prefs.getString("current_player_course", "—") ?: "—"
+        val preset = prefs.getString("difficulty_preset", "Средний") ?: "Средний"
+
+        val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+        val newRecord = PlayerRecord(
+            fullName = name, gender = gender, course = course, difficultyPreset = preset, maxScore = score, dateString = dateStr
+        )
+        AppDatabase.getDatabase(requireContext()).recordDao().insertRecord(newRecord)
+
         requireActivity().supportFragmentManager.popBackStack()
     }
 

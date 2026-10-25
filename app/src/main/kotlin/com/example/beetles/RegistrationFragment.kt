@@ -1,5 +1,6 @@
 package com.example.beetles
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -14,14 +15,13 @@ class RegistrationFragment : Fragment() {
     private lateinit var etFullName: EditText
     private lateinit var rgGender: RadioGroup
     private lateinit var spinnerCourse: Spinner
-    private lateinit var seekBarDifficulty: SeekBar
     private lateinit var calendarView: CalendarView
     private lateinit var btnSubmit: Button
     private lateinit var tvResult: TextView
     private lateinit var ivZodiac: ImageView
-    private lateinit var tvDifficultyValue: TextView
 
     private var selectedDate: Date = Date()
+    private val PREFS_NAME = "BeetlesGamePrefs"
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_registration, container, false)
@@ -33,25 +33,18 @@ class RegistrationFragment : Fragment() {
         etFullName = view.findViewById(R.id.etFullName)
         rgGender = view.findViewById(R.id.rgGender)
         spinnerCourse = view.findViewById(R.id.spinnerCourse)
-        seekBarDifficulty = view.findViewById(R.id.seekBarDifficulty)
         calendarView = view.findViewById(R.id.calendarView)
         btnSubmit = view.findViewById(R.id.btnSubmit)
         tvResult = view.findViewById(R.id.tvResult)
         ivZodiac = view.findViewById(R.id.ivZodiac)
-        tvDifficultyValue = view.findViewById(R.id.tvDifficultyValue)
 
         val courses = arrayOf("1 курс", "2 курс", "3 курс", "4 курс", "Магистратура")
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, courses)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerCourse.adapter = adapter
 
-        seekBarDifficulty.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvDifficultyValue.text = "Уровень сложности: $progress/10"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        etFullName.setText(prefs.getString("current_player_name", ""))
 
         calendarView.setOnDateChangeListener { _, year, month, dayOfMonth ->
             val calendar = Calendar.getInstance()
@@ -60,33 +53,32 @@ class RegistrationFragment : Fragment() {
         }
 
         btnSubmit.setOnClickListener {
-            val player = collectData()
-            displayData(player)
+            val name = etFullName.text.toString().trim()
+            if (name.isEmpty()) {
+                Toast.makeText(requireContext(), "Введите ФИО!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val selectedGenderId = rgGender.checkedRadioButtonId
+            val gender = if (selectedGenderId == R.id.rbMale) "Мужской" else "Женский"
+            val course = spinnerCourse.selectedItem.toString()
+            val zodiacSign = getZodiacSign(selectedDate)
+            val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+            val dateStr = dateFormat.format(selectedDate)
+
+            // Сохраняем ТЕКУЩЕГО активного игрока глобально
+            prefs.edit().apply {
+                putString("current_player_name", name)
+                putString("current_player_gender", gender)
+                putString("current_player_course", course)
+                putString("current_player_birthday", dateStr)
+                putString("current_player_zodiac", zodiacSign)
+                apply()
+            }
+
+            tvResult.text = "Игрок $name успешно авторизован для игры!"
+            ivZodiac.setImageResource(getZodiacImageResource(zodiacSign))
         }
-    }
-
-    private fun collectData(): Player {
-        val fullName = etFullName.text.toString()
-        val selectedGenderId = rgGender.checkedRadioButtonId
-        val gender = if (selectedGenderId == R.id.rbMale) "Мужской" else "Женский"
-        val course = spinnerCourse.selectedItem.toString()
-        val difficulty = seekBarDifficulty.progress
-        val zodiacSign = getZodiacSign(selectedDate)
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-
-        return Player(fullName, gender, course, difficulty, dateFormat.format(selectedDate), zodiacSign)
-    }
-
-    private fun displayData(player: Player) {
-        tvResult.text = """
-            ФИО: ${player.fullName}
-            Пол: ${player.gender}
-            Курс: ${player.course}
-            Уровень сложности: ${player.difficulty}/10
-            Дата рождения: ${player.birthDate}
-            Знак зодиака: ${player.zodiacSign}
-        """.trimIndent()
-        ivZodiac.setImageResource(getZodiacImageResource(player.zodiacSign))
     }
 
     private fun getZodiacSign(date: Date): String {

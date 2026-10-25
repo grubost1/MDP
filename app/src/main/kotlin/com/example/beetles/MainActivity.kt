@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
         val adapter = ViewPagerAdapter(this)
         adapter.addFragment(AuthorsFragment(), "Авторы")
         adapter.addFragment(RegistrationFragment(), "Регистрация")
+        adapter.addFragment(RecordsFragment(), "Рекорды")
         adapter.addFragment(HomeFragment(), "Жук")
         adapter.addFragment(SettingsFragment(), "Настройки")
         adapter.addFragment(RulesFragment(), "Правила")
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
         val tabIcons = arrayOf(
             R.drawable.ic_authors,
             R.drawable.ic_registration,
+            R.drawable.gemini,
             R.drawable.ic_bug,
             R.drawable.ic_settings,
             R.drawable.ic_rules
@@ -44,6 +46,6 @@ class MainActivity : AppCompatActivity() {
             tab.setIcon(tabIcons[position])
         }.attach()
 
-        viewPager.setCurrentItem(2, false)
+        viewPager.setCurrentItem(3, false)
     }
 }
