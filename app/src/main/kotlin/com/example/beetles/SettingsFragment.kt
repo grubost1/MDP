@@ -13,6 +13,10 @@ import androidx.fragment.app.Fragment
 
 class SettingsFragment : Fragment() {
 
+    private val KEY_BONUS_INTERVAL = "bonus_interval"
+    private lateinit var sbBonusInterval: SeekBar
+    private lateinit var tvBonusInterval: TextView
+
     private val PREFS_NAME = "BeetlesGamePrefs"
     private val KEY_SPEED = "speed"
     private val KEY_MAX_INSECTS = "max_insects"
@@ -40,7 +44,6 @@ class SettingsFragment : Fragment() {
         val savedDuration = prefs.getInt(KEY_DURATION, 60)
         val savedPreset = prefs.getString(KEY_PRESET, "Средно")
 
-        // Связываем элементы
         val rgPreset = view.findViewById<RadioGroup>(R.id.rgDifficultyPreset)
         sbSpeed = view.findViewById(R.id.sbSpeed)
         sbMaxInsects = view.findViewById(R.id.sbMaxCockroaches)
@@ -53,6 +56,23 @@ class SettingsFragment : Fragment() {
         setupSeekBar(sbSpeed, tvSpeed, "x", 1, 10, savedSpeed, KEY_SPEED)
         setupSeekBar(sbMaxInsects, tvMaxInsects, " шт.", 5, 50, savedMaxInsects, KEY_MAX_INSECTS)
         setupSeekBar(sbDuration, tvDuration, " сек.", 30, 180, savedDuration, KEY_DURATION)
+
+        sbBonusInterval = view.findViewById(R.id.sbBonusInterval)
+        tvBonusInterval = view.findViewById(R.id.tvBonusIntervalValue)
+        val savedBonusInterval = prefs.getInt(KEY_BONUS_INTERVAL, 5)
+        sbBonusInterval.max = 19  // 1-20 секунд
+        sbBonusInterval.progress = savedBonusInterval - 1
+        tvBonusInterval.text = "$savedBonusInterval сек."
+
+        sbBonusInterval.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                val interval = progress + 1
+                tvBonusInterval.text = "$interval сек."
+                prefs.edit().putInt(KEY_BONUS_INTERVAL, interval).apply()
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
 
         when (savedPreset) {
             "Легко" -> view.findViewById<RadioButton>(R.id.rbEasy).isChecked = true
@@ -105,8 +125,8 @@ class SettingsFragment : Fragment() {
                 textView.text = "$actualValue$suffix"
                 saveSetting(key, actualValue)
             }
-            override fun onStartTrackingTouch(sb: java.lang.SeekBar?) {}
-            override fun onStopTrackingTouch(sb: java.lang.SeekBar?) {}
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
     }
 

@@ -96,33 +96,6 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         startTimer()
     }
 
-    private fun stopGame() {
-        isPlaying = false
-        btnStart.setImageResource(android.R.drawable.ic_media_play)
-
-        spawnRunnable?.let { handler.removeCallbacks(it) }
-        moveRunnable?.let { handler.removeCallbacks(it) }
-        timerRunnable?.let { handler.removeCallbacks(it) }
-
-        activeBugsList.toList().forEach { removeBugFromSandbox(it, animate = true) }
-        Toast.makeText(requireContext(), "Игра окончена! Ваш счет: $score", Toast.LENGTH_LONG).show()
-
-        val prefs = requireContext().getSharedPreferences("BeetlesGamePrefs", Context.MODE_PRIVATE)
-        val name = prefs.getString("current_player_name", "Аноним") ?: "Аноним"
-        val gender = prefs.getString("current_player_gender", "—") ?: "—"
-        val course = prefs.getString("current_player_course", "—") ?: "—"
-        val preset = prefs.getString("difficulty_preset", "Средний") ?: "Средний"
-
-        val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
-
-        val newRecord = PlayerRecord(
-            fullName = name, gender = gender, course = course, difficultyPreset = preset, maxScore = score, dateString = dateStr
-        )
-        AppDatabase.getDatabase(requireContext()).recordDao().insertRecord(newRecord)
-
-        requireActivity().supportFragmentManager.popBackStack()
-    }
-
     private fun startSpawning() {
         spawnRunnable = object : Runnable {
             override fun run() {
@@ -259,6 +232,44 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         val mins = gameTime / 60
         val secs = gameTime % 60
         timeText.text = "Время: ${mins}:${secs.toString().padStart(2, '0')}"
+    }
+
+    private fun stopGame() {
+        isPlaying = false
+        btnStart.setImageResource(android.R.drawable.ic_media_play)
+        spawnRunnable?.let { handler.removeCallbacks(it) }
+        moveRunnable?.let { handler.removeCallbacks(it) }
+        timerRunnable?.let { handler.removeCallbacks(it) }
+        activeBugsList.toList().forEach { removeBugFromSandbox(it, animate = true) }
+        Toast.makeText(requireContext(), "Игра окончена! Ваш счет: $score", Toast.LENGTH_LONG).show()
+
+        if (score > 0) {
+            val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val playerId = prefs.getInt("current_player_id", 0)
+            val preset = prefs.getString("difficulty_preset", "Средний") ?: "Средний"
+            val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+            if (playerId != 0) {
+                val db = AppDatabase.getDatabase(requireContext())
+                val bestRecord = db.recordDao().getRecordByPlayer(playerId)
+
+                if (bestRecord == null || score > bestRecord.score) {
+                    val newRecord = PlayerRecord(
+                        playerId = playerId,
+                        score = score,
+                        difficultyPreset = preset,
+                        dateString = dateStr
+                    )
+                    db.recordDao().insertOrUpdateRecord(newRecord)
+
+                    if (bestRecord != null) {
+                        Toast.makeText(requireContext(), "🎉 Новый рекорд обновлен!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        requireActivity().supportFragmentManager.popBackStack()
     }
 
     override fun onDestroyView() {

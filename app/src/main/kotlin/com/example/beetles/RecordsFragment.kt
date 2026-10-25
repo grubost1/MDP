@@ -10,19 +10,34 @@ import androidx.fragment.app.Fragment
 
 class RecordsFragment : Fragment() {
 
+    private lateinit var lvRecords: ListView
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_records, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        lvRecords = view.findViewById(R.id.lvRecords)
+        updateRecordsList()
+    }
 
-        val lvRecords = view.findViewById<ListView>(R.id.lvRecords)
+    override fun onResume() {
+        super.onResume()
+        updateRecordsList()
+    }
 
-        val recordsList = AppDatabase.getDatabase(requireContext()).recordDao().getAllRecordsDesc()
+    private fun updateRecordsList() {
+        val db = AppDatabase.getDatabase(requireContext())
+        val recordsList = db.recordDao().getAllRecordsDesc()
+        val players = db.recordDao().getAllPlayers()
 
-        val displayStrings = recordsList.mapIndexed { index, record ->
-            "${index + 1}. ${record.fullName} — ${record.maxScore} очков\nСложность: ${record.difficultyPreset} | ${record.dateString}"
+        val validRecords = recordsList.filter { it.score >= 0 }
+
+        val displayStrings = validRecords.mapIndexed { index, record ->
+            val player = players.find { it.id == record.playerId }
+            val playerName = player?.fullName ?: "Игрок ${record.playerId}"
+            "${index + 1}. $playerName — ${record.score} очков\nСложность: ${record.difficultyPreset} | ${record.dateString}"
         }
 
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, displayStrings)

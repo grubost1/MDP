@@ -3,27 +3,46 @@ package com.example.beetles
 import android.content.Context
 import androidx.room.*
 
-@Entity(tableName = "records")
+@Entity(
+    tableName = "records",
+    indices = [Index(value = ["playerId"], unique = true)],
+    foreignKeys = [ForeignKey(
+        entity = Player::class,
+        parentColumns = ["id"],
+        childColumns = ["playerId"],
+        onDelete = ForeignKey.CASCADE
+    )]
+)
 data class PlayerRecord(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val fullName: String,
-    val gender: String,
-    val course: String,
+    val playerId: Int,
+    val score: Int,
     val difficultyPreset: String,
-    val maxScore: Int,
     val dateString: String
 )
 
 @Dao
 interface RecordDao {
-    @Query("SELECT * FROM records ORDER BY maxScore DESC")
+    @Query("SELECT * FROM records ORDER BY score DESC")
     fun getAllRecordsDesc(): List<PlayerRecord>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertRecord(record: PlayerRecord)
+    fun insertOrUpdateRecord(record: PlayerRecord)
+
+    @Query("SELECT * FROM records WHERE playerId = :playerId LIMIT 1")
+    fun getRecordByPlayer(playerId: Int): PlayerRecord?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertPlayer(player: Player): Long
+
+    @Query("SELECT * FROM players WHERE fullName = :name LIMIT 1")
+    fun getPlayerByName(name: String): Player?
+
+    @Query("SELECT * FROM players")
+    fun getAllPlayers(): List<Player>
 }
 
-@Database(entities = [PlayerRecord::class], version = 1, exportSchema = false)
+@Database(entities = [Player::class, PlayerRecord::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun recordDao(): RecordDao
 
@@ -36,7 +55,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "beetles_database"
-                ).allowMainThreadQueries().build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .allowMainThreadQueries()
+                    .build()
                 instance = instanceBuilding
                 instanceBuilding
             }

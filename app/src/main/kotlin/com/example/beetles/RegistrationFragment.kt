@@ -1,6 +1,5 @@
 package com.example.beetles
 
-import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -9,9 +8,9 @@ import android.widget.*
 import androidx.fragment.app.Fragment
 import java.text.SimpleDateFormat
 import java.util.*
+import android.content.Context
 
 class RegistrationFragment : Fragment() {
-
     private lateinit var etFullName: EditText
     private lateinit var rgGender: RadioGroup
     private lateinit var spinnerCourse: Spinner
@@ -19,9 +18,10 @@ class RegistrationFragment : Fragment() {
     private lateinit var btnSubmit: Button
     private lateinit var tvResult: TextView
     private lateinit var ivZodiac: ImageView
-
     private var selectedDate: Date = Date()
+
     private val PREFS_NAME = "BeetlesGamePrefs"
+    private val db by lazy { AppDatabase.getDatabase(requireContext()) }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_registration, container, false)
@@ -43,9 +43,6 @@ class RegistrationFragment : Fragment() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerCourse.adapter = adapter
 
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        etFullName.setText(prefs.getString("current_player_name", ""))
-
         calendarView.setOnDateChangeListener { _, year, month, dayOfMonth ->
             val calendar = Calendar.getInstance()
             calendar.set(year, month, dayOfMonth)
@@ -66,8 +63,26 @@ class RegistrationFragment : Fragment() {
             val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
             val dateStr = dateFormat.format(selectedDate)
 
-            // Сохраняем ТЕКУЩЕГО активного игрока глобально
+            // 1. Работа с базой данных
+            val db = AppDatabase.getDatabase(requireContext())
+            var player = db.recordDao().getPlayerByName(name)
+
+            if (player == null) {
+                // Создаем нового игрока в БД
+                player = Player(
+                    fullName = name,
+                    gender = gender,
+                    course = course,
+                    birthDate = dateStr,
+                    zodiacSign = zodiacSign
+                )
+                val newId = db.recordDao().insertPlayer(player)
+                player = player.copy(id = newId.toInt())
+            }
+
+            val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit().apply {
+                putInt("current_player_id", player.id)
                 putString("current_player_name", name)
                 putString("current_player_gender", gender)
                 putString("current_player_course", course)
@@ -76,8 +91,9 @@ class RegistrationFragment : Fragment() {
                 apply()
             }
 
-            tvResult.text = "Игрок $name успешно авторизован для игры!"
+            tvResult.text = "Игрок $name успешно авторизован и сохранен в базе!"
             ivZodiac.setImageResource(getZodiacImageResource(zodiacSign))
+            Toast.makeText(requireContext(), "Данные сохранены", Toast.LENGTH_SHORT).show()
         }
     }
 
