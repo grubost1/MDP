@@ -42,7 +42,7 @@ class SettingsFragment : Fragment() {
         val savedSpeed = prefs.getInt(KEY_SPEED, 5)
         val savedMaxInsects = prefs.getInt(KEY_MAX_INSECTS, 20)
         val savedDuration = prefs.getInt(KEY_DURATION, 60)
-        val savedPreset = prefs.getString(KEY_PRESET, "Средно")
+        val savedPreset = prefs.getString(KEY_PRESET, "Средний")
 
         val rgPreset = view.findViewById<RadioGroup>(R.id.rgDifficultyPreset)
         sbSpeed = view.findViewById(R.id.sbSpeed)
@@ -60,7 +60,7 @@ class SettingsFragment : Fragment() {
         sbBonusInterval = view.findViewById(R.id.sbBonusInterval)
         tvBonusInterval = view.findViewById(R.id.tvBonusIntervalValue)
         val savedBonusInterval = prefs.getInt(KEY_BONUS_INTERVAL, 5)
-        sbBonusInterval.max = 19  // 1-20 секунд
+        sbBonusInterval.max = 19
         sbBonusInterval.progress = savedBonusInterval - 1
         tvBonusInterval.text = "$savedBonusInterval сек."
 
@@ -75,8 +75,8 @@ class SettingsFragment : Fragment() {
         })
 
         when (savedPreset) {
-            "Легко" -> view.findViewById<RadioButton>(R.id.rbEasy).isChecked = true
-            "Сложно" -> view.findViewById<RadioButton>(R.id.rbHard).isChecked = true
+            "Легкий" -> view.findViewById<RadioButton>(R.id.rbEasy).isChecked = true
+            "Сложный" -> view.findViewById<RadioButton>(R.id.rbHard).isChecked = true
             else -> view.findViewById<RadioButton>(R.id.rbMedium).isChecked = true
         }
 
@@ -85,15 +85,15 @@ class SettingsFragment : Fragment() {
             when (checkedId) {
                 R.id.rbEasy -> {
                     updateSlidersAndSave(1, 10, 45)
-                    editor.putString(KEY_PRESET, "Легко")
+                    editor.putString(KEY_PRESET, "Легкий")
                 }
                 R.id.rbHard -> {
                     updateSlidersAndSave(8, 35, 90)
-                    editor.putString(KEY_PRESET, "Сложно")
+                    editor.putString(KEY_PRESET, "Сложный")
                 }
                 R.id.rbMedium -> {
                     updateSlidersAndSave(5, 20, 60)
-                    editor.putString(KEY_PRESET, "Средно")
+                    editor.putString(KEY_PRESET, "Средний")
                 }
             }
             editor.apply()

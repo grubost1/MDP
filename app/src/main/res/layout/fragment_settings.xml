@@ -23,9 +23,9 @@ android:padding="16dp">
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:layout_marginBottom="24dp">
-        <RadioButton android:id="@+id/rbEasy" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Легко (Медленно, мало жуков)" />
-        <RadioButton android:id="@+id/rbMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Средно (Стандарт)" />
-        <RadioButton android:id="@+id/rbHard" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Сложно (Экстрим)" />
+        <RadioButton android:id="@+id/rbEasy" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Легкий (Медленно, мало жуков)" />
+        <RadioButton android:id="@+id/rbMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Средний (Стандарт)" />
+        <RadioButton android:id="@+id/rbHard" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Сложный (Экстрим)" />
     </RadioGroup>
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Скорость жуков:"/>
