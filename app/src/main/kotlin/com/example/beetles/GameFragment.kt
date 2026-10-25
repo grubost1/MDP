@@ -25,13 +25,13 @@ class GameFragment : Fragment(R.layout.fragment_game) {
 
     private val handler = Handler(Looper.getMainLooper())
     private var score = 0
-
     private var gameTime = 60
     private var maxInsectsLimit = 20
-    private var gameSpeed = 5
-
+    private var gameSpeed = 10
     private var isPlaying = false
-    private val insects = mutableListOf<ImageView>()
+
+    private val bugViewsMap = mutableMapOf<String, ImageView>()
+    private val activeBugsList = mutableListOf<Bug>()
 
     private var spawnRunnable: Runnable? = null
     private var moveRunnable: Runnable? = null
@@ -76,29 +76,20 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         }
 
         btnStart.setOnClickListener {
-            if (isPlaying) {
-                stopGame()
-            } else {
-                startGame()
-            }
+            if (isPlaying) stopGame() else startGame()
         }
     }
 
     private fun startGame() {
         isPlaying = true
         score = 0
-
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        gameSpeed = prefs.getInt("speed", 5)
-        gameTime = prefs.getInt("duration", 60)
-        maxInsectsLimit = prefs.getInt("max_insects", 20)
-
+        loadSettings()
         updateUI()
 
         btnStart.setImageResource(android.R.drawable.ic_media_pause)
-
         bugSpawnArea.removeAllViews()
-        insects.clear()
+        bugViewsMap.clear()
+        activeBugsList.clear()
 
         startSpawning()
         startMoving()
@@ -113,10 +104,8 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         moveRunnable?.let { handler.removeCallbacks(it) }
         timerRunnable?.let { handler.removeCallbacks(it) }
 
-        insects.toList().forEach { removeInsect(it, animate = true) }
-
+        activeBugsList.toList().forEach { removeBugFromSandbox(it, animate = true) }
         Toast.makeText(requireContext(), "Игра окончена! Ваш счет: $score", Toast.LENGTH_LONG).show()
-
         requireActivity().supportFragmentManager.popBackStack()
     }
 
@@ -124,9 +113,9 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         spawnRunnable = object : Runnable {
             override fun run() {
                 if (isPlaying) {
-                    spawnInsect()
-                    val currentSpawnInterval = (1500 - (gameSpeed * 140)).toLong().coerceAtLeast(100L)
-                    handler.postDelayed(this, currentSpawnInterval)
+                    spawnLogicalBug()
+                    val interval = (1500 - (gameSpeed * 140)).toLong().coerceAtLeast(100L)
+                    handler.postDelayed(this, interval)
                 }
             }
         }
@@ -137,8 +126,8 @@ class GameFragment : Fragment(R.layout.fragment_game) {
         moveRunnable = object : Runnable {
             override fun run() {
                 if (isPlaying) {
-                    moveInsects()
-                    handler.postDelayed(this, 450L)
+                    moveLogicalBugsSmoothly()
+                    handler.postDelayed(this, 330L)
                 }
             }
         }
@@ -151,107 +140,103 @@ class GameFragment : Fragment(R.layout.fragment_game) {
                 if (isPlaying) {
                     gameTime--
                     updateUI()
-                    if (gameTime <= 0) {
-                        stopGame()
-                    } else {
-                        handler.postDelayed(this, 1000L)
-                    }
+                    if (gameTime <= 0) stopGame() else handler.postDelayed(this, 1000L)
                 }
             }
         }
         handler.post(timerRunnable!!)
     }
 
-    private fun spawnInsect() {
-        if (insects.size >= maxInsectsLimit) return
+    private fun spawnLogicalBug() {
+        if (activeBugsList.size >= maxInsectsLimit) return
 
-        val insect = ImageView(requireContext()).apply {
-            val randomBugRes = listOf(R.drawable.bug_green, R.drawable.bug_red, R.drawable.bug_blue, R.drawable.bug_dr).random()
-            setImageResource(randomBugRes)
+        val availableResources = listOf(
+            R.drawable.bug_green,
+            R.drawable.bug_red,
+            R.drawable.bug_blue,
+            R.drawable.bug_dr
+        )
+
+        val bugEntity = Bug.createRandomBug(availableResources)
+        activeBugsList.add(bugEntity)
+
+        val viewSizePx = (bugSpawnArea.width * bugEntity.logicalSize).toInt()
+
+        val bugView = ImageView(requireContext()).apply {
+            setImageResource(bugEntity.visualResource)
             scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = RelativeLayout.LayoutParams(viewSizePx, viewSizePx)
+
+            translationX = bugEntity.logicalX * bugSpawnArea.width
+            translationY = bugEntity.logicalY * bugSpawnArea.height
         }
 
-        val randomSize = 160
-        insect.tag = randomSize
-
-        val layoutParams = RelativeLayout.LayoutParams(randomSize, randomSize)
-        insect.layoutParams = layoutParams
-
-        val maxX = (bugSpawnArea.width - randomSize).coerceAtLeast(0)
-        val maxY = (bugSpawnArea.height - randomSize).coerceAtLeast(0)
-        val startX = Random.nextInt(0, maxX).toFloat()
-        val startY = Random.nextInt(0, maxY).toFloat()
-
-        insect.translationX = startX
-        insect.translationY = startY
-
-        insect.setOnClickListener {
+        bugView.setOnClickListener {
             if (isPlaying) {
-                score += 10
+                score += bugEntity.type.scoreValue
                 updateUI()
-                removeInsect(insect, animate = true)
+                removeBugFromSandbox(bugEntity, animate = true)
             }
         }
 
-        bugSpawnArea.addView(insect)
-        insects.add(insect)
+        bugViewsMap[bugEntity.id] = bugView
+        bugSpawnArea.addView(bugView)
 
-        insect.alpha = 0f
-        insect.scaleX = 0f
-        insect.scaleY = 0f
-        insect.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).start()
+        bugView.alpha = 0f
+        bugView.scaleX = 0f
+        bugView.scaleY = 0f
+        bugView.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).start()
     }
 
-    private fun moveInsects() {
-        if (!isPlaying) return
+    private fun moveLogicalBugsSmoothly() {
+        activeBugsList.forEach { bugEntity ->
+            val bugView = bugViewsMap[bugEntity.id] ?: return@forEach
 
-        insects.forEach { insect ->
-            val jumpRange = 50f * gameSpeed
-            val insectSize = insect.tag as Int
+            val oldPxX = bugView.translationX
+            val oldPxY = bugView.translationY
 
-            val deltaX = Random.nextFloat() * (jumpRange * 2) - jumpRange
-            val deltaY = Random.nextFloat() * (jumpRange * 2) - jumpRange
+            bugEntity.calculateNextLogicalPosition(gameSpeed)
 
-            val maxX = (bugSpawnArea.width - insectSize).toFloat().coerceAtLeast(0f)
-            val maxY = (bugSpawnArea.height - insectSize).toFloat().coerceAtLeast(0f)
+            val targetPxX = bugEntity.logicalX * bugSpawnArea.width
+            val targetPxY = bugEntity.logicalY * bugSpawnArea.height
 
-            val targetX = (insect.translationX + deltaX).coerceIn(0f, maxX)
-            val targetY = (insect.translationY + deltaY).coerceIn(0f, maxY)
+            val deltaPxX = (targetPxX - oldPxX).toDouble()
+            val deltaPxY = (targetPxY - oldPxY).toDouble()
 
-            val moveVectorX = (targetX - insect.translationX).toDouble()
-            val moveVectorY = (targetY - insect.translationY).toDouble()
-
-            if (moveVectorX != 0.0 || moveVectorY != 0.0) {
-                var angleDegrees = Math.toDegrees(Math.atan2(moveVectorY, moveVectorX))
-                angleDegrees += 90.0
-                insect.rotation = angleDegrees.toFloat()
+            if (deltaPxX != 0.0 || deltaPxY != 0.0) {
+                var angle = Math.toDegrees(Math.atan2(deltaPxY, deltaPxX))
+                angle += 90.0
+                bugView.rotation = angle.toFloat()
             }
 
-            insect.animate()
-                .translationX(targetX)
-                .translationY(targetY)
-                .setDuration(400)
+            bugView.animate()
+                .translationX(targetPxX)
+                .translationY(targetPxY)
+                .setDuration(800)
                 .setInterpolator(android.view.animation.LinearInterpolator())
                 .start()
         }
     }
 
-    private fun removeInsect(insect: ImageView, animate: Boolean) {
-        insects.remove(insect)
+    private fun removeBugFromSandbox(bug: Bug, animate: Boolean) {
+        val bugView = bugViewsMap[bug.id] ?: return
+        activeBugsList.remove(bug)
+        bugViewsMap.remove(bug.id)
+
         if (animate) {
-            insect.animate()
+            bugView.animate()
                 .alpha(0f)
-                .scaleX(1.5f)
-                .scaleY(1.5f)
+                .scaleX(1.4f)
+                .scaleY(1.4f)
                 .setDuration(200)
                 .setListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
-                        bugSpawnArea.removeView(insect)
+                        bugSpawnArea.removeView(bugView)
                     }
                 })
                 .start()
         } else {
-            bugSpawnArea.removeView(insect)
+            bugSpawnArea.removeView(bugView)
         }
     }
 
