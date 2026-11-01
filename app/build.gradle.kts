@@ -45,6 +45,9 @@ dependencies {
 
     add("ksp", libs.room.compiler)
 
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("io.insert-koin:koin-android:3.5.3")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
