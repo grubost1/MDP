@@ -9,6 +9,8 @@ class GameViewModel : ViewModel() {
         private set
     var isPlaying: Boolean = false
         private set
+    var gameSpeed: Int = 10
+    var maxInsectsLimit: Int = 20
 
     fun addScore(points: Int) {
         score += points
@@ -18,13 +20,15 @@ class GameViewModel : ViewModel() {
         if (gameTime > 0) gameTime--
     }
 
+    fun setGameTime(time: Int) {
+        this.gameTime = time
+    }
+
     fun setPlaying(playing: Boolean) {
         isPlaying = playing
     }
 
     fun reset() {
         score = 0
-        gameTime = 60
-        isPlaying = false
     }
 }

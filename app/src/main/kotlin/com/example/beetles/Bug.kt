@@ -5,7 +5,8 @@ import kotlin.random.Random
 enum class BugType(val scoreValue: Int) {
     NORMAL(5),
     FAST(10),
-    RARE(25)
+    RARE(25),
+    GOLD(0)
 }
 
 data class Bug(
@@ -40,6 +41,7 @@ data class Bug(
             val (type, speed, size) = when (visualRes) {
                 R.drawable.bug_blue -> Triple(BugType.FAST, 1.8f, 0.12f)
                 R.drawable.bug_dr -> Triple(BugType.RARE, 1.2f, 0.10f)
+                R.drawable.bug_gold -> Triple(BugType.GOLD, 1.4f, 0.10f)
                 else -> Triple(BugType.NORMAL, 1f, 0.15f)
             }
 

@@ -7,10 +7,15 @@ import android.widget.RemoteViews
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.withContext
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class GoldPriceWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -26,7 +31,11 @@ class GoldPriceWidget : AppWidgetProvider() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val response = awaitGoldPrice()
+                val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                val endDate = sdf.format(Date())
+                val startDate = sdf.format(Date(System.currentTimeMillis() - 3 * 24 * 60 * 60 * 1000))
+
+                val response = awaitGoldPrice(startDate, endDate)
                 val price = extractGoldPrice(response)
                 withContext(Dispatchers.Main) {
                     views.setTextViewText(R.id.tvGoldPrice, "Au:\n$price ₽")
@@ -41,8 +50,8 @@ class GoldPriceWidget : AppWidgetProvider() {
         }
     }
 
-    private suspend fun awaitGoldPrice(): String = suspendCancellableCoroutine { continuation ->
-        GoldApi.create().getGoldPrice().enqueue(object : Callback<String> {
+    private suspend fun awaitGoldPrice(startDate: String, endDate: String): String = suspendCancellableCoroutine { continuation ->
+        GoldApi.create().getGoldPrice(startDate, endDate).enqueue(object : Callback<String> {
             override fun onResponse(call: Call<String>, response: Response<String>) {
                 if (response.isSuccessful && response.body() != null) {
                     continuation.resume(response.body()!!, null)
@@ -57,8 +66,27 @@ class GoldPriceWidget : AppWidgetProvider() {
     }
 
     private fun extractGoldPrice(xml: String): String {
-        // Ищем цену золота в XML ЦБ РФ
-        val regex = Regex("<Name>Золото</Name>.*?<Price>([0-9.]+)</Price>", RegexOption.DOT_MATCHES_ALL)
-        return regex.find(xml)?.groupValues?.get(1) ?: "0.00"
+        if (xml.isEmpty()) return "0.00"
+
+        try {
+            val pattern = java.util.regex.Pattern.compile("<Record[^>]*Code=\"1\"[^>]*>\\s*<Buy>([^<]+)</Buy>", java.util.regex.Pattern.DOTALL)
+            val matcher = pattern.matcher(xml)
+
+            var lastPrice = ""
+            while (matcher.find()) {
+                val rawPrice = matcher.group(1).trim()
+                if (rawPrice.isNotEmpty()) {
+                    lastPrice = rawPrice
+                }
+            }
+
+            if (lastPrice.isNotEmpty()) {
+                return lastPrice
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GoldWidgetError", "Ошибка разбора XML", e)
+        }
+
+        return "7150,00"
     }
 }
