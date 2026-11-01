@@ -38,9 +38,7 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
     private lateinit var btnStart: FloatingActionButton
 
     private val handler = Handler(Looper.getMainLooper())
-
     private val bugViewsMap = mutableMapOf<String, ImageView>()
-    private val activeBugsList = mutableListOf<Bug>()
 
     private val bugRotationMap = mutableMapOf<String, Float>()
     private val bugRotationDirectionMap = mutableMapOf<String, Float>()
@@ -51,12 +49,10 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
     private var goldenBugRunnable: Runnable? = null
     private var bonusRunnable: Runnable? = null
     private var tiltExpirationRunnable: Runnable? = null
-    private var isTiltModeActive = false
+
     private var tiltBonusView: ImageView? = null
     private var sensorManager: SensorManager? = null
     private var gravitySensor: Sensor? = null
-    private var tiltX = 0f
-    private var tiltY = 0f
 
     private var soundPool: SoundPool? = null
     private val soundIds = mutableListOf<Int>()
@@ -67,26 +63,26 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initViews(view)
-
         loadSettings()
         initSound()
         initSensor()
         setupListeners()
 
-        if (viewModel.isPlaying) {
-            btnStart.setImageResource(android.R.drawable.ic_media_pause)
-            updateUI()
+        bugSpawnArea.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                v: View?, left: Int, top: Int, right: Int, bottom: Int,
+                oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
+            ) {
+                bugSpawnArea.removeOnLayoutChangeListener(this)
 
-            startSpawning()
-            startMoving()
-            startTimer()
-            startBonusSpawner()
-            startGoldenBugSpawner()
-        } else {
-            bugSpawnArea.post {
-                startGame()
+                if (viewModel.isPlaying) {
+                    restoreBugsOnScreen()
+                    resumeGameLoops()
+                } else {
+                    startGame()
+                }
             }
-        }
+        })
     }
 
     private fun initViews(view: View) {
@@ -111,7 +107,6 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
 
         val pool = soundPool ?: return
         val ctx = requireContext()
-
         val soundFiles = listOf(R.raw.bug_scream, R.raw.bug_scream_loud)
 
         soundFiles.forEach { resId ->
@@ -131,6 +126,10 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         sensorManager = sm
         gravitySensor = sm?.getDefaultSensor(Sensor.TYPE_GRAVITY)
             ?: sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        if (viewModel.isPlaying && viewModel.isTiltModeActive) {
+            gravitySensor?.let { sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        }
     }
 
     private fun loadSettings() {
@@ -170,15 +169,15 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         btnStart.setImageResource(android.R.drawable.ic_media_pause)
         bugSpawnArea.removeAllViews()
         bugViewsMap.clear()
-        activeBugsList.clear()
-
         bugRotationMap.clear()
         bugRotationDirectionMap.clear()
-        isTiltModeActive = false
         tiltBonusView = null
-        tiltX = 0f
-        tiltY = 0f
 
+        resumeGameLoops()
+    }
+
+    private fun resumeGameLoops() {
+        btnStart.setImageResource(android.R.drawable.ic_media_pause)
         startSpawning()
         startMoving()
         startTimer()
@@ -186,11 +185,50 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         startGoldenBugSpawner()
     }
 
+    private fun restoreBugsOnScreen() {
+        bugSpawnArea.removeAllViews()
+        bugViewsMap.clear()
+
+        viewModel.activeBugsList.forEach { bugEntity ->
+            val viewSizePx = (bugSpawnArea.width * bugEntity.logicalSize).toInt()
+            val bugView = ImageView(requireContext()).apply {
+                setImageResource(bugEntity.visualResource)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                layoutParams = RelativeLayout.LayoutParams(viewSizePx, viewSizePx)
+                translationX = bugEntity.logicalX * bugSpawnArea.width
+                translationY = bugEntity.logicalY * bugSpawnArea.height
+            }
+
+            bugView.setOnClickListener {
+                if (viewModel.isPlaying) {
+                    if (bugEntity.type == BugType.GOLD) {
+                        fetchGoldPriceAndAddScore(bugEntity)
+                    } else {
+                        viewModel.addScore(bugEntity.type.scoreValue)
+                    }
+                    updateUI()
+                    removeBugFromSandbox(bugEntity, animate = true)
+                }
+            }
+
+            bugViewsMap[bugEntity.id] = bugView
+            bugRotationMap[bugEntity.id] = bugView.rotation
+            bugRotationDirectionMap[bugEntity.id] = if (Random.nextBoolean()) 1f else -1f
+            bugSpawnArea.addView(bugView)
+        }
+    }
+
     private fun startGoldenBugSpawner() {
         goldenBugRunnable = object : Runnable {
             override fun run() {
                 if (viewModel.isPlaying) {
-                    spawnGoldenBug()
+                    if (viewModel.activeBugsList.size < viewModel.maxInsectsLimit) {
+                        viewModel.spawnGoldenBug()
+                        val newBug = viewModel.activeBugsList.lastOrNull { it.type == BugType.GOLD }
+                        if (newBug != null) {
+                            displayBugOnScreen(newBug, true)
+                        }
+                    }
                     handler.postDelayed(this, 20000L)
                 }
             }
@@ -198,34 +236,24 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         handler.postDelayed(goldenBugRunnable!!, 20000L)
     }
 
-    private fun spawnGoldenBug() {
-        if (activeBugsList.size >= viewModel.maxInsectsLimit) return
-
-        val bugEntity = Bug(
-            id = java.util.UUID.randomUUID().toString(),
-            logicalX = Random.nextFloat() * 0.8f,
-            logicalY = Random.nextFloat() * 0.8f,
-            speed = 1.4f,
-            logicalSize = 0.10f,
-            type = BugType.GOLD,
-            visualResource = R.drawable.bug_gold
-        )
-        activeBugsList.add(bugEntity)
-
+    private fun displayBugOnScreen(bugEntity: Bug, isGolden: Boolean) {
         val viewSizePx = (bugSpawnArea.width * bugEntity.logicalSize).toInt()
-
         val bugView = ImageView(requireContext()).apply {
             setImageResource(bugEntity.visualResource)
             scaleType = ImageView.ScaleType.FIT_CENTER
             layoutParams = RelativeLayout.LayoutParams(viewSizePx, viewSizePx)
-
             translationX = bugEntity.logicalX * bugSpawnArea.width
             translationY = bugEntity.logicalY * bugSpawnArea.height
         }
 
         bugView.setOnClickListener {
             if (viewModel.isPlaying) {
-                fetchGoldPriceAndAddScore(bugEntity)
+                if (isGolden) {
+                    fetchGoldPriceAndAddScore(bugEntity)
+                } else {
+                    viewModel.addScore(bugEntity.type.scoreValue)
+                }
+                updateUI()
                 removeBugFromSandbox(bugEntity, animate = true)
             }
         }
@@ -233,19 +261,18 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         bugViewsMap[bugEntity.id] = bugView
         bugRotationMap[bugEntity.id] = 0f
         bugRotationDirectionMap[bugEntity.id] = if (Random.nextBoolean()) 1f else -1f
-
         bugSpawnArea.addView(bugView)
-
         bugView.alpha = 0f
         bugView.scaleX = 0f
         bugView.scaleY = 0f
         bugView.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).start()
-
-        handler.postDelayed({
-            if (activeBugsList.contains(bugEntity)) {
-                removeBugFromSandbox(bugEntity, animate = true)
-            }
-        }, 7000L)
+        if (isGolden) {
+            handler.postDelayed({
+                if (viewModel.activeBugsList.contains(bugEntity)) {
+                    removeBugFromSandbox(bugEntity, animate = true)
+                }
+            }, 7000L)
+        }
     }
 
     private fun fetchGoldPriceAndAddScore(bug: Bug) {
@@ -255,11 +282,8 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
                     val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
                     val endDate = sdf.format(java.util.Date())
                     val startDate = sdf.format(java.util.Date(System.currentTimeMillis() - 3 * 24 * 60 * 60 * 1000))
-
                     val responseCall = GoldApi.create().getGoldPrice(startDate, endDate)
-
                     val responseString = responseCall.execute().body() ?: ""
-
                     val matcher = Pattern.compile("<Record[^>]*Code=\"1\"[^>]*>.*?<Buy>([^<]+)</Buy>", Pattern.DOTALL).matcher(responseString)
                     if (matcher.find()) {
                         val priceString = matcher.group(1).replace(",", ".").replace(" ", "")
@@ -290,16 +314,13 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         }
         handler.post(bonusRunnable!!)
     }
-
     private fun spawnBonus() {
         tiltBonusView?.let { bugSpawnArea.removeView(it) }
-
         val bonusSize = 150
         val bonusView = ImageView(requireContext()).apply {
             setImageResource(R.drawable.bonus)
             scaleType = ImageView.ScaleType.FIT_CENTER
             layoutParams = RelativeLayout.LayoutParams(bonusSize, bonusSize)
-
             val maxX = (bugSpawnArea.width - bonusSize).coerceAtLeast(0)
             val maxY = (bugSpawnArea.height - bonusSize).coerceAtLeast(0)
             translationX = Random.nextInt(0, maxX).toFloat()
@@ -323,49 +344,51 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
             }
         }, 5000L)
     }
+
     private fun activateTiltMode() {
-        isTiltModeActive = true
+        viewModel.isTiltModeActive = true
         Toast.makeText(requireContext(), "Режим наклона активирован на 10 сек!", Toast.LENGTH_SHORT).show()
         playRandomSound()
-        val sensor = gravitySensor
-        if (sensor != null && sensorManager != null) {
-            sensorManager?.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
-        }
+        gravitySensor?.let { sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
         tiltExpirationRunnable = Runnable {
-            if (viewModel.isPlaying && isTiltModeActive) {
+            if (viewModel.isPlaying && viewModel.isTiltModeActive) {
                 deactivateTiltMode()
             }
         }
         handler.postDelayed(tiltExpirationRunnable!!, BONUS_DURATION_MS)
     }
+
     private fun deactivateTiltMode() {
-        isTiltModeActive = false
+        viewModel.isTiltModeActive = false
         sensorManager?.unregisterListener(this)
         tiltExpirationRunnable?.let { handler.removeCallbacks(it) }
         Toast.makeText(requireContext(), "Режим наклона завершен", Toast.LENGTH_SHORT).show()
     }
+
     override fun onSensorChanged(event: SensorEvent?) {
-        if (!viewModel.isPlaying || !isTiltModeActive) return
+        if (!viewModel.isPlaying || !viewModel.isTiltModeActive) return
         if (event?.sensor?.type != Sensor.TYPE_GRAVITY && event?.sensor?.type != Sensor.TYPE_ACCELEROMETER) return
-        val values = event.values
+        val values = event.values ?: return
         if (values.size < 3) return
-        val ax = values[0]
+
+        val ax = -values[0]
         val ay = values[1]
-        val az = values[2]
-        tiltX = ax
-        tiltY = ay
-        if (Math.abs(az) > 5f) {
-            val factor = 9.8f / Math.abs(az).coerceAtLeast(1f)
-            tiltX = ax * factor
-            tiltY = ay * factor
-        }
+
+        viewModel.tiltX = ax
+        viewModel.tiltY = ay
     }
+
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
     private fun startSpawning() {
         spawnRunnable = object : Runnable {
             override fun run() {
                 if (viewModel.isPlaying) {
-                    spawnLogicalBug()
+                    if (viewModel.activeBugsList.size < viewModel.maxInsectsLimit) {
+                        viewModel.spawnLogicalBug()
+                        viewModel.activeBugsList.lastOrNull { it.type != BugType.GOLD }?.let {
+                            displayBugOnScreen(it, false)
+                        }
+                    }
                     val interval = (1500 - (viewModel.gameSpeed * 140)).toLong().coerceAtLeast(100L)
                     handler.postDelayed(this, interval)
                 }
@@ -373,11 +396,12 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         }
         handler.post(spawnRunnable!!)
     }
+
     private fun startMoving() {
         moveRunnable = object : Runnable {
             override fun run() {
                 if (viewModel.isPlaying) {
-                    if (isTiltModeActive) {
+                    if (viewModel.isTiltModeActive) {
                         moveBugsWithTilt()
                         handler.postDelayed(this, 16L)
                     } else {
@@ -389,27 +413,38 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         }
         handler.post(moveRunnable!!)
     }
+
     private fun moveBugsWithTilt() {
         val areaWidth = bugSpawnArea.width.toFloat()
         val areaHeight = bugSpawnArea.height.toFloat()
-        val tiltMultiplier = 2.5f
+        val tiltMultiplier = 3.0f
         val rotationSpeed = 2.5f
-        activeBugsList.forEach { bugEntity ->
+
+        viewModel.activeBugsList.forEach { bugEntity ->
             val bugView = bugViewsMap[bugEntity.id] ?: return@forEach
             val viewWidth = bugView.width.toFloat().coerceAtLeast(1f)
             val viewHeight = bugView.height.toFloat().coerceAtLeast(1f)
-            var newX = bugView.translationX + tiltX * tiltMultiplier
-            var newY = bugView.translationY + tiltY * tiltMultiplier
+
+            var newX = bugView.translationX + viewModel.tiltX * tiltMultiplier
+            var newY = bugView.translationY + viewModel.tiltY * tiltMultiplier
+
             val maxX = areaWidth - viewWidth
             val maxY = areaHeight - viewHeight
             var hitWall = false
+
             if (newX < 0f) { newX = 0f; hitWall = true }
             else if (newX > maxX) { newX = maxX; hitWall = true }
+
             if (newY < 0f) { newY = 0f; hitWall = true }
             else if (newY > maxY) { newY = maxY; hitWall = true }
+
             bugView.translationX = newX
             bugView.translationY = newY
-            val speed = Math.sqrt((tiltX * tiltX + tiltY * tiltY).toDouble()).toFloat()
+
+            bugEntity.logicalX = newX / areaWidth
+            bugEntity.logicalY = newY / areaHeight
+
+            val speed = Math.sqrt((viewModel.tiltX * viewModel.tiltX + viewModel.tiltY * viewModel.tiltY).toDouble()).toFloat()
             if (speed > 0.5f && !hitWall) {
                 val currentRotation = bugRotationMap.getOrDefault(bugEntity.id, 0f)
                 val direction = bugRotationDirectionMap.getOrDefault(bugEntity.id, 1f)
@@ -419,6 +454,8 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
             }
         }
     }
+
+
     private fun startTimer() {
         timerRunnable = object : Runnable {
             override fun run() {
@@ -431,42 +468,9 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
         }
         handler.post(timerRunnable!!)
     }
-    private fun spawnLogicalBug() {
-        if (activeBugsList.size >= viewModel.maxInsectsLimit) return
-        val availableResources = listOf(
-            R.drawable.bug_green,
-            R.drawable.bug_red,
-            R.drawable.bug_blue,
-            R.drawable.bug_dr
-        )
-        val bugEntity = Bug.createRandomBug(availableResources)
-        activeBugsList.add(bugEntity)
-        val viewSizePx = (bugSpawnArea.width * bugEntity.logicalSize).toInt()
-        val bugView = ImageView(requireContext()).apply {
-            setImageResource(bugEntity.visualResource)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            layoutParams = RelativeLayout.LayoutParams(viewSizePx, viewSizePx)
-            translationX = bugEntity.logicalX * bugSpawnArea.width
-            translationY = bugEntity.logicalY * bugSpawnArea.height
-        }
-        bugView.setOnClickListener {
-            if (viewModel.isPlaying) {
-                viewModel.addScore(bugEntity.type.scoreValue)
-                updateUI()
-                removeBugFromSandbox(bugEntity, animate = true)
-            }
-        }
-        bugViewsMap[bugEntity.id] = bugView
-        bugRotationMap[bugEntity.id] = 0f
-        bugRotationDirectionMap[bugEntity.id] = if (Random.nextBoolean()) 1f else -1f
-        bugSpawnArea.addView(bugView)
-        bugView.alpha = 0f
-        bugView.scaleX = 0f
-        bugView.scaleY = 0f
-        bugView.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(250).start()
-    }
+
     private fun moveLogicalBugsSmoothly() {
-        activeBugsList.forEach { bugEntity ->
+        viewModel.activeBugsList.forEach { bugEntity ->
             val bugView = bugViewsMap[bugEntity.id] ?: return@forEach
             val oldPxX = bugView.translationX
             val oldPxY = bugView.translationY
@@ -476,8 +480,7 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
             val deltaPxX = (targetPxX - oldPxX).toDouble()
             val deltaPxY = (targetPxY - oldPxY).toDouble()
             if (deltaPxX != 0.0 || deltaPxY != 0.0) {
-                var angle = Math.toDegrees(Math.atan2(deltaPxY, deltaPxX))
-                angle += 90.0
+                var angle = Math.toDegrees(Math.atan2(deltaPxY, deltaPxX)) + 90.0
                 bugView.rotation = angle.toFloat()
             }
             bugView.animate()
@@ -488,54 +491,59 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
                 .start()
         }
     }
+
     private fun removeBugFromSandbox(bug: Bug, animate: Boolean) {
-        val bugView = bugViewsMap[bug.id] ?: return
-        activeBugsList.remove(bug)
+        val bugView = bugViewsMap[bug.id]
+        viewModel.removeBug(bug)
         bugViewsMap.remove(bug.id)
         bugRotationMap.remove(bug.id)
         bugRotationDirectionMap.remove(bug.id)
-        if (animate) {
-            bugView.animate()
-                .alpha(0f)
-                .scaleX(1.4f)
-                .scaleY(1.4f)
-                .setDuration(200)
-                .setListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        bugSpawnArea.removeView(bugView)
-                    }
-                })
-                .start()
-        } else {
-            bugSpawnArea.removeView(bugView)
+        if (bugView != null) {
+            if (animate) {
+                bugView.animate()
+                    .alpha(0f)
+                    .scaleX(1.4f)
+                    .scaleY(1.4f)
+                    .setDuration(200)
+                    .setListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            bugSpawnArea.removeView(bugView)
+                        }
+                    })
+                    .start()
+            } else {
+                bugSpawnArea.removeView(bugView)
+            }
         }
     }
+
     private fun updateUI() {
         scoreText.text = "Очки: ${viewModel.score}"
         val mins = viewModel.gameTime / 60
         val secs = viewModel.gameTime % 60
         timeText.text = "Время: ${mins}:${secs.toString().padStart(2, '0')}"
     }
+
     private fun stopGame() {
         viewModel.setPlaying(false)
-        isTiltModeActive = false
         btnStart.setImageResource(android.R.drawable.ic_media_play)
-        spawnRunnable?.let { handler.removeCallbacks(it) }
-        moveRunnable?.let { handler.removeCallbacks(it) }
-        timerRunnable?.let { handler.removeCallbacks(it) }
-        bonusRunnable?.let { handler.removeCallbacks(it) }
-        tiltExpirationRunnable?.let { handler.removeCallbacks(it) }
-        goldenBugRunnable?.let { handler.removeCallbacks(it) }
+
+        clearGameLoops()
         sensorManager?.unregisterListener(this)
-        activeBugsList.toList().forEach { removeBugFromSandbox(it, animate = true) }
+
+        bugViewsMap.values.forEach { bugSpawnArea.removeView(it) }
+        bugViewsMap.clear()
         tiltBonusView?.let { bugSpawnArea.removeView(it) }
         tiltBonusView = null
+
         Toast.makeText(requireContext(), "Игра окончена! Ваш счет: ${viewModel.score}", Toast.LENGTH_LONG).show()
+
         if (viewModel.score > 0) {
             val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val playerId = prefs.getInt("current_player_id", 0)
             val preset = prefs.getString("difficulty_preset", "Средний") ?: "Средний"
             val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
             if (playerId != 0) {
                 val db = AppDatabase.getDatabase(requireContext())
                 val bestRecord = db.recordDao().getRecordByPlayer(playerId)
@@ -553,19 +561,27 @@ class GameFragment : Fragment(R.layout.fragment_game), SensorEventListener {
                 }
             }
         }
+
+        viewModel.reset()
+
         requireActivity().supportFragmentManager.popBackStack()
     }
-    override fun onDestroyView() {
-        super.onDestroyView()
+
+    private fun clearGameLoops() {
         spawnRunnable?.let { handler.removeCallbacks(it) }
         moveRunnable?.let { handler.removeCallbacks(it) }
         timerRunnable?.let { handler.removeCallbacks(it) }
         bonusRunnable?.let { handler.removeCallbacks(it) }
         tiltExpirationRunnable?.let { handler.removeCallbacks(it) }
         goldenBugRunnable?.let { handler.removeCallbacks(it) }
+    }
+
+    override fun onDestroyView() {
+        clearGameLoops()
         sensorManager?.unregisterListener(this)
         soundPool?.release()
         soundPool = null
         soundIds.clear()
+        super.onDestroyView()
     }
 }
